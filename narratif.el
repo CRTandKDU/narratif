@@ -9,23 +9,54 @@
 
 ;;; Code:
 
+;; local-block-beg
+o;; local-block-end
+;; local-count-clicks
+;; local-ast
+
+(defun narratif--qorg-headline (ast str)
+  (let ((found nil))
+    (org-element-map ast 'headline
+      (lambda (headline)
+	(if (and (null found)
+		 (string= str (org-element-property :raw-value headline)))
+	    (setq found headline))))
+    found)
+  )
+
+(defun narratif--hook-passage (hl)
+  (let* ((section-title (org-element-property :raw-value local-section))
+	 (headline (narratif--qorg-headline local-ast section-title))
+	 (click-hl (narratif--qorg-headline headline
+					    (format "@%d" local-count-clicks)))
+	 )
+    (when click-hl
+      (narratif--append-passage click-hl t)
+      (setq-local local-count-clicks (1- local-count-clicks)))
+    )
+  )
+
 (defun narratif--append-section (headline)
   (goto-char local-block-end)
-  (setq-local local-block-beg (point))
+  (setq-local local-block-beg (point)
+	      local-count-clicks 0)
   (insert
    (format "%s\n\n%s"
 	   (make-string (frame-width) ?-)
 	   (org-element-interpret-data
 	    (car (org-element-contents headline)))))
-  (setq-local local-block-end (point))
+  (setq-local local-block-end (point)
+	      local-section headline)
   )
 
-(defun narratif--append-passage (headline)
+(defun narratif--append-passage (headline &optional in-hook)
   (goto-char local-block-end)
   (insert
    (format "\n%s" (org-element-interpret-data
 		   (org-element-contents headline))))
-  (setq-local local-block-end (point))
+  (setq-local local-block-end (point)
+	      local-count-clicks (1+ local-count-clicks))
+  (unless in-hook (narratif--hook-passage headline))
   )
 
 (defun narratif--deactivate-block ()
@@ -114,7 +145,8 @@
 	(setq-local local-ast ast
 		    local-block-beg (point))
 	(insert (org-element-interpret-data beg))
-	(setq-local local-block-end (point))
+	(setq-local local-block-end (point)
+		    local-section beg)
 	(narratif-org-mode)
 	)
       )
@@ -173,7 +205,6 @@
     "<backspace>"	#'narratif--prev-link
     "TAB"		#'narratif--next-link
     "RET"		#'narratif--link))
-
 
 
 
