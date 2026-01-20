@@ -13,6 +13,7 @@
 ;; local-block-end	: integer. Point at end of current section.
 ;; local-count-clicks	: integer. Number of passages clicked in current section
 ;; local-count-turns	: integer. How many links clicked (sections + passages)
+;; local-section        : list. Current section (headline)
 ;; local-seen		: list. Sections visited (headline).
 ;; local-vars		: alist. Key-Value store.
 ;; local-ast		: list. The full AST of the sory Org-mode file
@@ -51,6 +52,10 @@
 
 (defun story-get (key)
   (cdr (assoc key local-vars)))
+
+(defun story-section (title)
+  (narratif--destination-link title))
+  
 
 ;; Hooks and effects on hyperlinks for sections and passages
 
@@ -121,9 +126,8 @@
 	    (org-element-interpret-data
 	     (car (org-element-contents headline))))))
   (setq-local local-block-end (point)
-	      local-section headline
-	      local-seen (append local-seen (list headline))
-	      )
+	      local-seen (append local-seen (list local-section)))
+  (setq-local local-section headline)
   )
 
 (defun narratif--append-passage (headline &optional in-hook)
@@ -173,67 +177,100 @@
 (defun narratif--path-parts (path)
   (string-split path "@"))
 
+(defun narratif--action-link (link)
+  (let ((action
+	 (cadr
+	  (narratif--path-parts (org-element-property :path  link)))))
+    (when action
+      (eval (read action)))))
+
+(defun narratif--destination-link (link &optional section-only)
+  (let ((link-found nil)
+	(dest
+	 (if (stringp link) link
+	   (car (narratif--path-parts (org-element-property :path link)))))
+	)
+    (org-element-map local-ast 'headline
+      (lambda (headline)
+	(cond
+	 ( ;; Link to SECTION: 
+	  (and (null link-found)
+	       (= 1 (org-element-property :level headline))
+	       (string=	dest
+			(org-element-property :raw-value headline)))
+	  (setq link-found t)
+	  ;; (with-current-buffer (get-buffer-create "*NARRATIF*")
+	  ;; Deactivate section
+	  (narratif--deactivate-block)
+	  ;; Execute action part of path, if any
+	  (unless (stringp link)
+	    (let ((action
+		   (cadr
+		    (narratif--path-parts (org-element-property :path  link))))
+		  )
+	      (when action
+		(eval (read action)))))
+	  ;; Append new section
+	  (narratif--append-section headline)
+	  ;; )
+	  )
+	 
+	 ( ;; Link to PASSAGE
+	  (and (null section-only)
+	       (null link-found)
+	       (= 2 (org-element-property :level headline))
+	       (string=	dest
+			(org-element-property :raw-value headline)))
+	  (setq link-found t)
+	  ;; (with-current-buffer (get-buffer-create "*NARRATIF*")
+	  ;; Deactivate passage link
+	  (narratif--deactivate-link link)
+	  ;; Execute action part of path, if any
+	  (unless (stringp link)
+	    (let ((action
+		   (cadr
+		    (narratif--path-parts (org-element-property :path  link))))
+		  )
+	      (when action
+		(eval (read action)))))
+	  ;; Append passage
+	  (narratif--append-passage headline)
+	  ;; )
+	  )
+	 )
+	)
+      )
+    link-found
+    )
+  )
+
 (defun narratif--link ()
+  "Follow a narratif link.
+
+A narratif link is an org-mode link where :path has two optional parts,
+a destination, which is either a section headline (`*' level 1) or a
+passage headline (`**' level 2), and an action (an Emacs Lisp sexp),
+separated by the special character `@'.
+
+Following a narratif link may result in changing the text in the current
+section, appending a new section to the narration, and/or triggering an
+operation specified in the action part of the :path.
+"
   (interactive)
   (let ((link (org-element-context))
-	(link-found nil)
 	)
     (cond
      ((string= "fuzzy" (org-element-property :type link))
       (setq-local local-count-turns (1+ local-count-turns))
-      (org-element-map local-ast 'headline
-	(lambda (headline)
-	  (cond
-	   ( ;; Link to SECTION: [[Level-1 headline[@lisp-sexp]][text]]
-	    (and (null link-found)
-		 (= 1 (org-element-property :level headline))
-		 (string=
-		  (car
-		   (narratif--path-parts (org-element-property :path  link)))
-		  (org-element-property :raw-value headline)))
-	    (setq link-found t)
-	    ;; (with-current-buffer (get-buffer-create "*NARRATIF*")
-	    ;; Deactivate section
-	    (narratif--deactivate-block)
-	    ;; Execute action part of path, if any
-	    (let ((action
-		   (cadr
+      (if (string= ""
+		   (car
 		    (narratif--path-parts (org-element-property :path  link))))
-		  )
-	      (when action
-		(eval (read action))))
-	    ;; Append new section
-	    (narratif--append-section headline)
-	    ;; )
-	    )
-	   
-	   ( ;; Link to PASSAGE
-	    (and (null link-found)
-		 (= 2 (org-element-property :level headline))
-		 (string=
-		  (car
-		   (narratif--path-parts (org-element-property :path  link)))
-		  (org-element-property :raw-value headline)))
-	    (setq link-found t)
-	    ;; (with-current-buffer (get-buffer-create "*NARRATIF*")
-	    ;; Deactivate passage link
-	    (narratif--deactivate-link link)
-	    ;; Execute action part of path, if any
-	    (let ((action
-		   (cadr
-		    (narratif--path-parts (org-element-property :path  link))))
-		  )
-	      (when action
-		(eval (read action))))
-	    ;; Append passage
-	    (narratif--append-passage headline)
-	    ;; )
-	    )
-
-	   )
-	  )
+	  ;; Action-only link
+	  (narratif--action-link link)
+	;; Destination and optional action link
+	(narratif--destination-link link)
 	)
-	; End of fuzzy org-mode link
+      ; End of fuzzy org-mode link
       )
      )
     )
@@ -253,7 +290,7 @@
 		    local-block-beg (point)
 		    local-count-turns 0
 		    local-vars nil
-		    local-seen (list beg))
+		    local-seen nil)
 	(insert (org-element-interpret-data beg))
 	(setq-local local-block-end (point)
 		    local-section beg)
