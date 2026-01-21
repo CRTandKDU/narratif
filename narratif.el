@@ -17,6 +17,7 @@
 ;; local-seen		: list. Sections visited (headline).
 ;; local-vars		: alist. Key-Value store.
 ;; local-ast		: list. The full AST of the sory Org-mode file
+;; local-link           : list. The last clicked action link 
 
 ;; Utilities and ancillaries
 
@@ -55,7 +56,32 @@
 
 (defun story-section (title)
   (narratif--destination-link title))
-  
+
+(defun story-rotate (fragments)
+  "Rotate text of link from the argument list.
+
+`FRAGMENTS': the list of successive permutations of text.
+The permutations include the text of the link itself."
+  (let* ((frag
+	  (buffer-substring-no-properties
+	   (org-element-property :contents-begin local-link)
+	   (org-element-property :contents-end local-link)))
+	 (next-frag
+	  (let ((tail (member frag fragments)))
+	    (if tail (if (cadr tail) (cadr tail) (car fragments)) frag)))
+	 )
+
+    (delete-region
+     (org-element-property :begin local-link)
+     (org-element-property :end local-link))
+    (insert
+     (format "[[%s][%s]]" (org-element-property :raw-link local-link) next-frag))
+    )
+  (setq-local local-block-end (point-max))
+  )
+
+(defun story-sequence (fragments)
+  )
 
 ;; Hooks and effects on hyperlinks for sections and passages
 
@@ -178,11 +204,13 @@
   (string-split path "@"))
 
 (defun narratif--action-link (link)
+  (setq-local local-link link)
   (let ((action
 	 (cadr
 	  (narratif--path-parts (org-element-property :path  link)))))
     (when action
-      (eval (read action)))))
+      (eval (read action))))
+  (setq-local local-link nil))
 
 (defun narratif--destination-link (link &optional section-only)
   (let ((link-found nil)
@@ -291,7 +319,8 @@ operation specified in the action part of the :path.
 		    local-count-turns 0
 		    local-vars nil
 		    local-seen nil)
-	(insert (org-element-interpret-data beg))
+	(insert (narratif--interpret
+		 (org-element-interpret-data beg)))
 	(setq-local local-block-end (point)
 		    local-section beg)
 	(narratif-org-mode)
