@@ -44,12 +44,16 @@
 	      node))
       (insert line))))
 
+(defun story-seenp (title)
+  (member title local-seen))
+
 (defun story-set (key val)
   (setq-local local-vars
 	      (append (list (cons key val))
 		      (if (assoc key local-vars)
 			  (assoc-delete-all key local-vars)
-			local-vars))))
+			local-vars)))
+  "")
 
 (defun story-get (key)
   (cdr (assoc key local-vars)))
@@ -57,11 +61,63 @@
 (defun story-section (title)
   (narratif--destination-link title))
 
+(defun story-sequence (fragments)
+  "Steps through a sequence of text links from the argument list.
+
+When the last fragment is a headline, starting either with `* ' or `** ',
+clicking on the penultimate fragment jumps to the target section or
+passage.
+
+If not, the ultimate fragment is displayed as (non-clickable) plain text.
+
+Returns the new end of block (and buffer).
+
+FRAGMENTS The list of strings to step through.
+"
+  (let* ((frag
+	  (buffer-substring-no-properties
+	   (org-element-property :contents-begin local-link)
+	   (org-element-property :contents-end local-link)))
+	 (tail (member frag fragments))
+	 (next-frag
+	  (if tail (if (cadr tail) (cadr tail) nil) frag))
+	 )
+    (delete-region
+     (org-element-property :begin local-link)
+     (org-element-property :end local-link))
+    (cond
+     ((null (caddr tail))
+      ;; Last item in sequence
+      (cond
+       ((string= "** " (substring next-frag 0 3))
+	(insert frag)
+	(setq-local local-block-end (point-max))
+	(narratif--destination-link (substring next-frag 3)))
+       ((string= "* " (substring next-frag 0 2))
+	(insert frag)
+	(setq-local local-block-end (point-max))
+	(narratif--destination-link (substring next-frag 2)))
+       (t (insert next-frag) (setq-local local-block-end (point-max)))
+       ))
+     (t
+      ;; Sequence item 
+      (insert
+       (format "[[%s][%s]]"
+	       (org-element-property :raw-link local-link) next-frag))
+      (setq-local local-block-end (point-max))
+      )
+     )
+    )
+  
+  )
+
 (defun story-rotate (fragments)
   "Rotate text of link from the argument list.
 
-`FRAGMENTS': the list of successive permutations of text.
-The permutations include the text of the link itself."
+Return the end ob block (and buffer).
+
+FRAGMENTS the list of successive permutations of text.
+This list should include the text of the link itself."
   (let* ((frag
 	  (buffer-substring-no-properties
 	   (org-element-property :contents-begin local-link)
@@ -78,9 +134,6 @@ The permutations include the text of the link itself."
      (format "[[%s][%s]]" (org-element-property :raw-link local-link) next-frag))
     )
   (setq-local local-block-end (point-max))
-  )
-
-(defun story-sequence (fragments)
   )
 
 ;; Hooks and effects on hyperlinks for sections and passages
@@ -152,7 +205,8 @@ The permutations include the text of the link itself."
 	    (org-element-interpret-data
 	     (car (org-element-contents headline))))))
   (setq-local local-block-end (point)
-	      local-seen (append local-seen (list local-section)))
+	      local-seen (append local-seen
+				 (list (org-element-property :raw-value local-section))))
   (setq-local local-section headline)
   )
 
@@ -163,7 +217,9 @@ The permutations include the text of the link itself."
 		   (org-element-interpret-data
 		    (org-element-contents headline)))))
   (setq-local local-block-end (point)
-	      local-count-clicks (1+ local-count-clicks))
+	      local-count-clicks (1+ local-count-clicks)
+	      local-seen (append local-seen
+				 (list (org-element-property :raw-value headline))))
   (unless in-hook (narratif--hook-passage headline))
   )
 
@@ -276,8 +332,8 @@ The permutations include the text of the link itself."
   "Follow a narratif link.
 
 A narratif link is an org-mode link where :path has two optional parts,
-a destination, which is either a section headline (`*' level 1) or a
-passage headline (`**' level 2), and an action (an Emacs Lisp sexp),
+a destination, which is either a section headline (`* ' level 1) or a
+passage headline (`** ' level 2), and an action (an Emacs Lisp sexp),
 separated by the special character `@'.
 
 Following a narratif link may result in changing the text in the current
@@ -318,12 +374,13 @@ operation specified in the action part of the :path.
 		    local-block-beg (point)
 		    local-count-turns 0
 		    local-vars nil
-		    local-seen nil)
+		    local-seen (list "* start"))
 	(insert (narratif--interpret
 		 (org-element-interpret-data beg)))
 	(setq-local local-block-end (point)
 		    local-section beg)
 	(narratif-org-mode)
+	(visual-line-mode)
 	)
       )
     )
