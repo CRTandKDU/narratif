@@ -80,9 +80,9 @@ You head over. He's early seventies, neatly dressed.
 
 The morning settles into a rhythm. You make drinks, you wipe tables, you learn that the espresso machine makes a concerning noise that Carla insists is "normal."
 
-@{(if (> (story-get 'maya) 0) (format "Maya catches your eye as she's leaving, laptop tucked under her arm. \"See you tomorrow, %s. Maybe I'll have actually written something by then.\" She doesn't sound convinced." (story-get 'player)))}
+@{(if (> (story-get 'maya) 0) (format "Maya catches your eye as she's leaving, laptop tucked under her arm. \"See you tomorrow, %s. Maybe I'll have actually written something by then.\" She doesn't sound convinced." (story-get 'player)) "")}
 
-@{(if (> (story-get 'ellis) 0) (format "Ellis leaves exact change on the table, plus a single dollar tip. He nods at you on his way out—the smallest possible acknowledgment. It feels like a victory."))}
+@{(if (> (story-get 'ellis) 0) (format "Ellis leaves exact change on the table, plus a single dollar tip. He nods at you on his way out—the smallest possible acknowledgment. It feels like a victory.") "")}
 
 By afternoon, the shop is quiet. Carla sends you home early. "Rest up. Evening shifts are different."
 
@@ -281,7 +281,7 @@ The bell above the door jingles. Carla's back from her errands.
 [[Reflect]]
 
 * Reflect
-@{(if (and (> (story-get 'ellis) 1) (> (story-get 'maya) 1) (> (story-get 'sam) 1))
+@{(if (and (> (story-get 'ellis) 1) (> (story-get 'maya) 1) (> (story-get 'sam)  1))
   (format "
 \"I think I'm going to like it here,\" you say.
 
@@ -291,7 +291,7 @@ She hands you an apron—your own, with your name embroidered on it.
 
 \"Welcome to The Daily Grind, %s. You're one of us now.\"
 
-**THE END — The New Regular**"
+THE END — The New Regular"
     (story-get 'player))
   (if (or (> (story-get 'ellis) 1) (> (story-get 'maya) 1) (> (story-get 'sam) 1)) "
 \"It was good. I think I'm getting the hang of it.\"
@@ -304,7 +304,7 @@ She pats you on the shoulder.
 
 \"Same time tomorrow.\"
 
-**THE END — First Steps**"
+THE END — First Steps"
 "
 \"It was... quiet.\"
 
@@ -316,6 +316,7 @@ She locks the register and flips off the lights.
 
 You nod. There's still more to learn about this place—and the people who call it home.
 
-**THE END — Room to Grow**"
-))}
+THE END — Room to Grow"
+))
+}
 
